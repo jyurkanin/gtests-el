@@ -21,7 +21,7 @@
 (defvar gtest-executable nil
   "The path to your gtest test executable")
 
-(defun set-gtest-executable (gtest-executable-path)
+(defun gtest-set-executable (gtest-executable-path)
   "Set the gtest binary executable. Absolute Path."
   (interactive "f")
   (setq gtest-executable gtest-executable-path))
@@ -39,232 +39,205 @@
           (push (list (substring line 0 -1)) suites)
         (push (substring line 2 nil) (car suites))))))
 
-(defun my-tree-widget-get-icon-from-status (tree)
-  (let ((status (widget-get tree :status)))
-    (message (format "tree status: %s" status))
-    (cond
-     ((eq status nil) 'tree-widget-empty-icon)
-     ((string= status "error") 'tree-widget-empty-icon)
-     ((string= status "pass") 'tree-widget-open-icon)
-     ((string= status "fail") 'tree-widget-close-icon))))
-
-(defun my-tree-widget-value-create (tree)
-  "Create the TREE tree-widget."
-  (let* ((node   (tree-widget-node tree))
-         (flags  (widget-get tree :tree-widget--guide-flags))
-         (indent (widget-get tree :indent))
-         ;; Setup widget's image support.  Looking up for images, and
-         ;; setting widgets' :tag-glyph is done here, to allow us to
-         ;; dynamically change the image theme.
-         (widget-image-enable (tree-widget-use-image-p))
-         children buttons)
-    (and indent (not (widget-get tree :parent))
-         (insert-char ?\  indent))
-    (if (widget-get tree :open)
-;;;; Expanded node.
-        (let ((args     (widget-get tree :args))
-              (guide    (widget-get tree :guide))
-              (nohandle-guide (widget-get tree :nohandle-guide))
-              (noguide  (widget-get tree :no-guide))
-              (endguide (widget-get tree :end-guide))
-              (handle   (widget-get tree :handle))
-              (nohandle (widget-get tree :no-handle))
-              (guidi    (tree-widget-find-image "guide"))
-              (nohandle-guidi (tree-widget-find-image "nohandle-guide"))
-              (noguidi  (tree-widget-find-image "no-guide"))
-              (endguidi (tree-widget-find-image "end-guide"))
-              (handli   (tree-widget-find-image "handle"))
-              (nohandli (tree-widget-find-image "no-handle")))
-          ;; Request children at run time, when requested.
-          (when (and (widget-get tree :expander)
-                     (widget-apply tree :expander-p))
-            (setq args (mapcar #'widget-convert
-                               (widget-apply tree :expander)))
-            (widget-put tree :args args))
-          ;; Defer the node widget creation after icon creation.
-          (widget-put tree :node (widget-convert node))
-          ;; Create the icon widget for the expanded tree.
-          (push (widget-create-child-and-convert
-                 tree (my-tree-widget-get-icon-from-status tree)
-                 ;; Pass the node widget to child.
-                 :node (widget-get tree :node))
-                buttons)
-          ;; Create the tree node widget.
-          (push (widget-create-child tree (widget-get tree :node))
-                children)
-          ;; Update the icon :node with the created node widget.
-          (widget-put (car buttons) :node (car children))
-          ;; Create the tree children.
-          (while args
-            (setq node (car args)
-                  args (cdr args))
-            (and indent (insert-char ?\  indent))
-            ;; Insert guide lines elements from previous levels.
-            (dolist (f (reverse flags))
-              (widget-create-child-and-convert
-               tree (if f nohandle-guide noguide)
-               :tag-glyph (if f nohandle-guidi noguidi))
-              (widget-create-child-and-convert
-               tree nohandle :tag-glyph nohandli))
-            ;; Insert guide line element for this level.
-            (widget-create-child-and-convert
-             tree (if args guide endguide)
-             :tag-glyph (if args guidi endguidi))
-            ;; Insert the node handle line
-            (widget-create-child-and-convert
-             tree handle :tag-glyph handli)
-            (if (tree-widget-p node)
-                ;; Create a sub-tree node.
-                (push (widget-create-child-and-convert
-                       tree node :tree-widget--guide-flags
-                       (cons (if args t) flags))
-                      children)
-              ;; Create the icon widget for a leaf node.
-              (push (widget-create-child-and-convert
-                     tree (widget-get tree :leaf-icon)
-                     ;; At this point the node widget isn't yet created.
-                     :node (setq node (widget-convert
-                                       node :tree-widget--guide-flags
-                                       (cons (if args t) flags)))
-                     :tree-widget--leaf-flag t)
-                    buttons)
-              ;; Create the leaf node widget.
-              (push (widget-create-child tree node) children)
-              ;; Update the icon :node with the created node widget.
-              (widget-put (car buttons) :node (car children)))))
-;;;; Collapsed node.
-      ;; Defer the node widget creation after icon creation.
-      (widget-put tree :node (widget-convert node))
-      ;; Create the icon widget for the collapsed tree.
-      (push (widget-create-child-and-convert
-             tree (my-tree-widget-get-icon-from-status tree)
-             ;; Pass the node widget to child.
-             :node (widget-get tree :node))
-            buttons)
-      ;; Create the tree node widget.
-      (push (widget-create-child tree (widget-get tree :node))
-            children)
-      ;; Update the icon :node with the created node widget.
-      (widget-put (car buttons) :node (car children))
-      )
-    ;; Save widget children and buttons.  The tree-widget :node child
-    ;; is the first element in :children.
-    (widget-put tree :children (nreverse children))
-    (widget-put tree :buttons  buttons)
-    ))
-
-(defun my-tree-widget-update-icon (tree)
-  "Update the icon of TREE to NEW-ICON."
-  (message (format "tree type: %s" (widget-type tree)))
-  (let ((buttons (widget-get tree :buttons)))
-    (when buttons
-      (let ((icon-widget (widget-convert (my-tree-widget-get-icon-from-status tree)))
-            (old-icon-widget (car buttons)))
-        ;; (widget-put icon-widget :node (widget-get old-icon-widget :node))
-        (widget-put icon-widget :parent (widget-get old-icon-widget :parent))
-        (widget-put icon-widget :indent (widget-get old-icon-widget :indent))
-        (widget-put icon-widget :supress-face (widget-get old-icon-widget :supress-face))
-        (widget-put icon-widget :button-overlay (widget-get old-icon-widget :button-overlay))
-        (widget-put icon-widget :from (widget-get old-icon-widget :from))
-        (widget-put icon-widget :to (widget-get old-icon-widget :to))
-        (setcar buttons icon-widget)
-        (widget-value-set icon-widget (widget-get icon-widget :value)))
-        )
-      ))
+;; (defun my-tree-widget-get-icon-from-status (tree)
+;;   (let ((status (widget-get tree :status)))
+;;     (message (format "tree status: %s" status))
+;;     (cond
+;;      ((eq status nil) 'tree-widget-empty-icon)
+;;      ((string= status "error") 'tree-widget-empty-icon)
+;;      ((string= status "pass") 'tree-widget-open-icon)
+;;      ((string= status "fail") 'tree-widget-close-icon))))
 
 (defun gtest-get-test-case-result (test-suite test-case)
   "Returns 1 if successful"
-  (let* ((stdout (shell-command-to-string  (format "%s --gtest_filter=%s.%s" gtest-executable test-suite test-case)))
+  (let* ((stdout (shell-command-to-string (format "%s --gtest_filter=%s.%s" gtest-executable test-suite test-case)))
          (pos-end (string-match (regexp-quote "[----------] Global test environment tear-down") stdout))
          (pos-fail (string-match (regexp-quote "[  FAILED  ]") stdout)))
-    
+    ; (message "stdout: %s" stdout)
     (if pos-end
         (if pos-fail
             "fail"
           "pass")
-      "error"
+      "error")))
+
+(defun gtest-make-tree-node (text &optional parent)
+  (message "text: %s" text)
+  (let ((new-node (list :parent parent
+                        :text text
+                        :children nil
+                        :status nil
+                        :visible t
+                        :indent "")))
+    (when parent
+      (plist-put new-node :indent (concat "    " (plist-get parent :indent)))
+      (plist-put parent :children (push new-node (plist-get parent :children)))
+      )
+    new-node))
+
+(defun gtest-add-test-cases (test-suite-node test-list)
+  "test-list is a list like this (test-case1 test-case2 ... test-suite-name)"
+  (dolist (test-case (butlast test-list))
+    (gtest-make-tree-node test-case test-suite-node)))
+
+(defun gtest-create-tree ()
+  (let ((test-suite-nodes))
+    (dolist (tests (gtest-list-tests) test-suite-nodes) 
+      (push (gtest-make-tree-node (car (last tests))) test-suite-nodes)
+      (gtest-add-test-cases (car test-suite-nodes) tests)
+      (message "::")
       )))
 
-(defun gtest-run-test-for-widget (test-case-node)
-  (let* ((test-case (widget-get test-case-node :tag))
-         (temp-node (widget-get test-case-node :parent))
-         (test-suite-node (widget-get temp-node :parent))
-         (test-suite (widget-get test-suite-node :tag)))
+(defun gtest-get-node-string (node)
+  (let ((status (plist-get node :status)))
+    (format "%s%s %s\n"
+            (plist-get node :indent)
+            (cond
+             ((string= status "pass") "p")
+             ((string= status "fail") "f")
+             ((string= status "error") "e")
+             ("n"))
+            (plist-get node :text))))
 
-    (message (format "test-case-node: %s" (widget-type test-case-node)))
-    (message (format "temp-node: %s" (widget-type temp-node)))
-    (message (format "test-suite-node: %s" (widget-type test-suite-node)))
-    
-    (if test-suite
-        (progn
-          (widget-put temp-node :status (gtest-get-test-case-result test-suite test-case))
-          (my-tree-widget-update-icon temp-node))
-      (let ((child-nodes (widget-get temp-node :children))
-            (did-fail nil)
-            (did-error nil)
-            (result nil))
-        (setq child-nodes (cdr child-nodes))
-        ;;(message (format "Num child nodes %d" (length child-nodes)))
-        (while child-nodes
-          (setq result (gtest-get-test-case-result test-case (widget-get (car child-nodes) :tag)))
-          (setq did-fail (or did-fail (eq "fail" result)))
-          (setq did-error (or did-error (eq "error" result)))
-          (setq child-nodes (cdr child-nodes)))
-        (if did-error
-            (widget-put test-case-node :status "error")
-          (if did-fail
-              (widget-put test-case-node :status "fail")
-            (widget-put test-case-node :status "pass")))))))
+(defun gtest-display-tree--recursive (tree)
+  (insert (gtest-get-node-string tree))
+  (let ((child-nodes (plist-get tree :children)))
+    (dolist (child-node child-nodes)      
+      (gtest-display-tree--recursive child-node))
+    ))
 
+(defun gtest-get-buffer-create ()
+  (get-buffer-create "GTest Tree"))
 
+(defun gtest-display-tree (root-nodes)
+  (let ((gtest-buffer (gtest-get-buffer-create)))
+    (pop-to-buffer
+     gtest-buffer
+     (with-current-buffer gtest-buffer
+       (erase-buffer)
+       (dolist (root-node root-nodes)
+         (gtest-display-tree--recursive root-node))))))
 
-(defun my-tree-widget-run-test ()
-  "TODO: Make this actually run an executable and parse the output. Then   update the state of the test-case-node widget. Check if all the
-   test-cases in a suite are passing. If so, then mark the suite as
-   passing."
+(defvar gtest-highlight-overlay nil
+  "Overlay used to highlight the current line.")
+
+(defun gtest-create-highlight ()
+  "Toggle highlighting on the current line."
+  (let ((gtest-buffer (gtest-get-buffer-create)))
+    (with-current-buffer gtest-buffer
+      (beginning-of-buffer)
+      (setq gtest-highlight-overlay (make-overlay (line-beginning-position) (line-end-position) gtest-buffer))
+      (overlay-put gtest-highlight-overlay 'face 'highlight))))
+
+(defun gtest-move (direction)
+  (let ((gtest-buffer (gtest-get-buffer-create)))
+    (with-current-buffer gtest-buffer
+      (goto-char (overlay-start gtest-highlight-overlay))
+      (forward-line direction)
+      (move-overlay gtest-highlight-overlay (line-beginning-position 1) (line-end-position 1) gtest-buffer)
+      )
+    ))
+
+(defun gtest-move-down ()
   (interactive)
-  (let ((tree (widget-at (point))))
-    (when (gtest-run-test-for-widget (widget-get tree :node)))))
+  (gtest-move 1))
 
-(defvar my-tree-widget-button-keymap
-  (let ((km (make-sparse-keymap)))
-    (set-keymap-parent km tree-widget-button-keymap)
-    (keymap-set km "r" 'my-tree-widget-run-test)
-    km))
+(defun gtest-move-up ()
+  (interactive)
+  (gtest-move -1))
 
-(define-widget 'my-tree-widget 'tree-widget
-  "My Tree Widget."
-  :value-create 'my-tree-widget-value-create
-  :status nil
-  :keep (list :status)
-  :keymap my-tree-widget-button-keymap
+(defun gtest-update-test-case (test-suite-node test-case-node)
+  (plist-put test-case-node :status
+             (gtest-get-test-case-result
+              (plist-get test-suite-node :text)
+              (plist-get test-case-node :text)))
+  (plist-get test-case-node :status)
   )
 
-(defun create-dynamic-tree ()
-  "Create tree with variable number of child nodes"
-  (setq all-tests (gtest-list-tests))
-  
-  (let ((buffer (get-buffer-create "Gtest Tests")))
-    (with-current-buffer buffer
-      (erase-buffer)
-      (widget-insert "Expandable Tree Widget:\n\n")
-      (dolist (suite-tests all-tests)
-          (widget-create
-           'my-tree-widget
-           :tag (car (last suite-tests))
-           :open nil
-           :args
-           (mapcar (lambda (n)
-                     (widget-convert
-                      'my-tree-widget
-                      :tag n
-                      :action                      
-                      ))
-                   (butlast suite-tests))))
-      (use-local-map my-tree-widget-button-keymap)
-      (widget-setup))
-    (switch-to-buffer buffer)))
+(defun gtest-update-test-suite (test-suite-node)
+  (let ((test-suite (plist-get test-suite-node :text))
+        has-error
+        has-fail
+        test-case-result)
 
-(create-dynamic-tree)
+    (message "test-suite %s" test-suite)
+    
+    (dolist (child-node (plist-get test-suite-node :children))
+      (setq test-case-result (gtest-update-test-case test-suite-node child-node))
+      (setq has-error (or has-error (string= "error" test-case-result)))
+      (setq has-fail (or has-fail (string= "fail" test-case-result))))
+    
+    (plist-put test-suite-node :status
+               (cond
+                (has-error "error")
+                (has-fail "fail")
+                ("pass")))
+    (plist-get test-suite-node :status)))
 
-        
+(defun gtest-redraw-node--recursive (line-number node)
+  "redraw node at line number"
+  (when (plist-get node :visible)
+    (let ((original-point (point))
+          (gtest-buffer (gtest-get-buffer-create)))
+      (goto-line line-number)
+      (kill-whole-line)
+      (insert (gtest-get-node-string node))
+      (goto-char original-point))
+    (let ((count 1))
+      (dolist (child-node (plist-get node :children))
+        (gtest-redraw-node--recursive (+ line-number count) child-node)
+        (cl-incf count)
+        ))))
+
+(defun gtest-redraw-node (line-number node)
+  (gtest-redraw-node--recursive line-number node)
+  (goto-line line-number)
+  (move-overlay gtest-highlight-overlay (line-beginning-position) (line-end-position) (gtest-get-buffer-create))
+  )
+
+(defun gtest-update-test ()
+  (interactive)
+  (let ((count 0)
+        test-case-node)
+    (dolist (test-suite-node test-suite-nodes)
+      (cl-incf count)
+      (cond
+       ((= count (line-number-at-pos))
+        (gtest-update-test-suite test-suite-node)
+        (gtest-redraw-node (line-number-at-pos) test-suite-node))
+       ((< count (line-number-at-pos))
+        (setq child_idx (- (line-number-at-pos) count))
+        (setq children (plist-get test-suite-node :children))
+        (when (<= child_idx (length children))
+          (setq test-case-node (nth (- child_idx 1) children))
+          (gtest-update-test-case test-suite-node test-case-node)
+          (gtest-redraw-node (line-number-at-pos) test-case-node))
+        (setq count (+ count (length children)))))
+      )))
+
+(defvar gtest-minor-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "n") 'gtest-move-down)
+    (define-key map (kbd "p") 'gtest-move-up)
+    (define-key map (kbd "r") 'gtest-update-test)
+    map))
+
+(define-minor-mode gtest-mode  
+  "A minor mode for displaying gtests"
+  nil
+  :global nil
+  :lighter "GTest"
+  :keymap gtest-minor-mode-map
+  )
+
+(defun gtest-enable (executable)
+  (interactive "f")
+  (gtest-set-executable executable)
+  (with-current-buffer (gtest-get-buffer-create)
+    (gtest-mode))
+  (gtest-display-tree test-suite-nodes)
+  (gtest-create-highlight)
+  (setq cursor-in-non-selected-windows nil))
+
+(setq test-suite-nodes (gtest-create-tree))
+
+
